@@ -1,0 +1,264 @@
+// Experiment 1: Pressure
+// Project Name: Nano Dino
+// by Kasper Zhang
+// DIGF-6037 Creation & Computation
+// Credits: Kate Hartman & Nick Pucket
+
+
+// GLOBLE VARIABLE
+long MyRnd;               // Variable to hold random numbers
+int timer = 100;          // Timer delay for LED animations
+int speed = 150;          // Speed of block movement (lower value = faster speed)
+bool dead_status = false; // Player's status: false if alive, true if dead
+bool user_status = true;  // User's current action state: true if action is valid
+int end_state = 0;        // Game end state: 1 if the game is won, 0 if lost
+int sensorValue;          // Stores value from the sensor
+
+// GLOBLE FUNCTIONS
+void setup() {
+  Serial.begin(9600);              // Initialize serial communication
+  randomSeed(analogRead(0));       // Seed the random number generator
+  for (int thisPin = 2; thisPin < 11; thisPin++) {
+    pinMode(thisPin, OUTPUT);      // Set pins 2 to 10 as output for LEDs
+  }
+}
+
+// notification when start game
+void start(){
+  // Blink all LEDs 3 times to signal game start
+  for (int i = 0; i <= 3; i++){
+    for (int thisPin = 2; thisPin < 11; thisPin++) {
+      digitalWrite(thisPin, HIGH); 
+    }
+    delay(500);                    
+    for (int thisPin = 2; thisPin < 11; thisPin++) {
+      digitalWrite(thisPin, LOW); 
+    }
+    delay(300);                     
+  }
+}
+
+// notification when end game
+void end(int end_state){
+  if (end_state == 1){ // If the game is won
+    // Run a back-and-forth LED sequence 2 times
+    for (int n = 0; n < 2; n++){
+      for (int thisPin = 2; thisPin < 11; thisPin++) {
+        digitalWrite(thisPin, HIGH); // Light up LEDs from pin 2 to 10
+        delay(timer);
+        digitalWrite(thisPin, LOW);
+      }
+      // Reverse LED sequence
+      for (int thisPin = 10; thisPin >= 2; thisPin--) {
+        digitalWrite(thisPin, HIGH);
+        delay(timer);
+        digitalWrite(thisPin, LOW);
+      }
+    }
+  }
+  else{ // If the game is lost
+    // Blink all LEDs 5 times quickly
+    for (int i = 0; i < 5; i++){
+      for (int thisPin = 2; thisPin < 11; thisPin++) {
+        digitalWrite(thisPin, HIGH); // Turn on all LEDs
+      }
+      delay(100);
+      for (int thisPin = 2; thisPin < 11; thisPin++) {
+        digitalWrite(thisPin, LOW);  // Turn off all LEDs
+      }
+      delay(100);
+    }
+  }
+}
+
+// move the blocks
+
+// Function to move one block at a time
+void one_block(){
+  for (int thisPin = 10; thisPin >= 2; thisPin--) {
+      update_user_state();  // Check user state based on sensor input
+      if (thisPin != 4){
+        digitalWrite(thisPin, HIGH); // Light up one block (LED)
+        delay(speed);
+        digitalWrite(thisPin, LOW);
+      }
+      else{ // If block is at position 4 (player position), consider if there has a hit
+        update_user_state(); 
+        dead_status = true; // Player can get hit
+        delay(speed);
+        update_user_state(); 
+        dead_status = false; // Reset status after block passes
+      }
+  }
+}
+
+// Function to move two blocks at a time
+void two_blocks(){
+  for (int thisPin = 10; thisPin >= 2; thisPin--) {
+      update_user_state();  // Update user state before every move
+      if (thisPin == 4){ 
+        update_user_state();
+        dead_status = true; // Player hit by block
+        digitalWrite(thisPin+1, HIGH); // Light up two blocks (current and next pin)
+        delay(speed);
+        digitalWrite(thisPin+1, LOW);
+        update_user_state(); 
+        dead_status = false;
+      }
+      else if (thisPin == 3){
+        update_user_state();
+        dead_status = true; // Player can get hit
+        digitalWrite(thisPin, HIGH);
+        delay(speed);
+        digitalWrite(thisPin, LOW);
+        update_user_state();
+        dead_status = false;
+      }
+      else{
+        digitalWrite(thisPin, HIGH);    // Light up two blocks simultaneously
+        digitalWrite(thisPin+1, HIGH);
+        delay(speed);
+        digitalWrite(thisPin, LOW);
+        digitalWrite(thisPin+1, LOW);
+      }
+  }
+  // Final block movement
+  for (int j = 1; j < 2; j++){
+    digitalWrite(2, HIGH); // Flash the first block
+    delay(speed);
+    digitalWrite(2, LOW);
+  }
+}
+
+// Function to move three blocks at a time
+void three_blocks(){
+    for (int thisPin = 10; thisPin >= 2; thisPin--) {
+      update_user_state();  // Check user state
+      if (thisPin == 4){
+        update_user_state();
+        dead_status = true; // Player can get hit
+        digitalWrite(thisPin+1, HIGH);
+        digitalWrite(thisPin+2, HIGH);
+        delay(speed);
+        digitalWrite(thisPin+1, LOW);
+        digitalWrite(thisPin+2, LOW);
+        update_user_state();
+        dead_status = false;
+      }
+      else if (thisPin == 3){
+        update_user_state();
+        dead_status = true;
+        digitalWrite(thisPin, HIGH);
+        digitalWrite(thisPin+2, HIGH);
+        delay(speed);
+        digitalWrite(thisPin, LOW);
+        digitalWrite(thisPin+2, LOW);
+        update_user_state();
+        dead_status = false;
+      }
+      else if (thisPin == 2){
+        update_user_state();
+        dead_status = true;
+        digitalWrite(thisPin, HIGH);
+        digitalWrite(thisPin+1, HIGH);
+        delay(speed);
+        digitalWrite(thisPin, LOW);
+        digitalWrite(thisPin+1, LOW);
+        update_user_state();
+        dead_status = false;
+      }
+      else{
+        digitalWrite(thisPin, HIGH);    // Move all three blocks
+        digitalWrite(thisPin+1, HIGH);
+        digitalWrite(thisPin+2, HIGH);
+        delay(speed);
+        digitalWrite(thisPin, LOW);
+        digitalWrite(thisPin+1, LOW);
+        digitalWrite(thisPin+2, LOW);
+      }
+  }
+  // Final block movement
+  for (int j = 1; j < 3; j++){
+    digitalWrite(2, HIGH);  // Flash first block
+    delay(speed);
+    digitalWrite(2, LOW);
+  }
+}
+
+// Randomly choose block pattern (1, 2, or 3 blocks)
+void blocks(int n){
+  if (n == 1){
+    one_block(); // Move one block
+  }
+  else if (n == 2){
+    two_blocks(); // Move two blocks
+  }
+  else{
+    three_blocks(); // Move three blocks
+  }
+}
+
+// Generate random number between 1 and 3
+int random_number(){
+  MyRnd = random(1,4); // Random number for block pattern
+  return MyRnd;
+}
+
+// Get sensor value from analog input
+int get_sensor_value(){
+  int sensor_value = analogRead(A0); // Read sensor value from A0 pin
+  Serial.print(sensor_value);        // Print sensor value to the serial monitor
+  Serial.println(); 
+  return sensor_value;
+}
+
+// Update the user's state based on sensor input
+void update_user_state(){
+  if (get_sensor_value() >= 300){
+    user_status = false;        // Player can get hit
+    digitalWrite(4, HIGH);      // Light up LED to indicate Player can get hit
+  }
+  else{
+    user_status = true;         // Player can not get hit
+    digitalWrite(4, LOW);
+  }
+  user_status_bool_printer(user_status); // Print the current status to the serial monitor
+}
+
+// Print user status to serial monitor(for testing)
+void user_status_bool_printer(bool n){
+  if (n){
+    Serial.print("USER STATUS: TRUE"); 
+    Serial.println(); 
+  }
+  else{
+    Serial.print("USER STATUS: FALSE"); 
+    Serial.println(); 
+  }
+}
+
+// play game
+void play_game(){
+  digitalWrite(4, HIGH); // Light up player LED
+  int round = 10;        // Set the number of rounds to play
+  while(round > 0 && (dead_status != true && user_status != false)){ 
+    int current_rondom = random_number(); // Get random block pattern
+    blocks(current_rondom);               // Move blocks
+    round--;
+  }
+  if (round <= 0){
+    end_state = 1; // Set end state to 1 (game won) if rounds are completed
+  }
+  else{
+    end_state = 0; // Set end state to 0 (game lost) if player failed
+  }
+  digitalWrite(4, LOW); // Turn off player LED
+}
+
+void loop() {
+  start();       // Start the game
+  play_game();   // Play the game
+  end(end_state); // End the game and show the result
+  dead_status = false; // Reset player status
+  user_status = true;  // Reset user action status
+}
